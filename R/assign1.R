@@ -196,6 +196,50 @@ if (length(all_bins) > 0 && na_bins > 0 && eu_bins > 0) {
   cat("\n=== PERMUTATION TEST SKIPPED: not enough BINs to simulate ===\n")
 }
 
+### --- Major Edit 3: BIN-level enrichment analysis (Fisher’s Exact Test + FDR) ---
+# Motivation:
+# Even if overall similarity is low, we want to identify WHICH specific BINs are disproportionately represented in one continent vs the other. Fisher’s Exact Test is ideal for categorical count data with small sample sizes.
+
+# Total counts per continent (all BINs combined)
+tot_na <- sum(bin_wide$`North America`)
+tot_eu <- sum(bin_wide$Eurasia)
+
+# Build BIN-level contingency tables and run Fisher’s test per BIN
+bin_tests <- bin_wide %>%
+  rowwise() %>%
+  mutate(
+    fisher_p = {
+      mat <- matrix(
+        c(`North America`,               # this BIN in NA
+          Eurasia,                       # this BIN in Eurasia
+          tot_na - `North America`,      # other BINs in NA
+          tot_eu - Eurasia),             # other BINs in Eurasia
+        nrow = 2,
+        byrow = TRUE
+      )
+      fisher.test(mat)$p.value
+    }
+  ) %>%
+  ungroup()
+
+# Add FDR correction
+bin_tests <- bin_tests %>%
+  mutate(fdr = p.adjust(fisher_p, method = "BH"))
+
+# Determine enrichment direction
+bin_tests <- bin_tests %>%
+  mutate(
+    direction = case_when(
+      fdr >= 0.05 ~ "NS",
+      `North America` > Eurasia ~ "North America enriched",
+      Eurasia > `North America` ~ "Eurasia enriched",
+      TRUE ~ "NS"
+    )
+  )
+
+cat("\n=== BIN-LEVEL ENRICHMENT RESULTS (MAJOR EDIT 3) ===\n")
+print(bin_tests %>% select(bin_uri, `North America`, Eurasia, fisher_p, fdr, direction))
+
 ## ======= 5: FIGURES =======
 # Figure 1: BIN richness per continent (bar plot)
 bin_rich <- pa |>
