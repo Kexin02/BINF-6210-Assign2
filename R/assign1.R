@@ -116,7 +116,7 @@ shared_bins <- pa %>% filter(`North America` == 1 & `Eurasia` == 1) %>% pull(bin
 message(sprintf("Unique BINs NA=%d, EUAS=%d, Shared=%d",
                 sum(pa$`North America`), sum(pa$Eurasia), length(shared_bins)))
 
-## ======= 4B: RAREFIED BIN RICHNESS (MAJOR EDIT 1) =======
+### --- Major Edit 1: Rarefied Bin Richness ---
 # Motivation:
 # Eurasia has more public records than North America, so simple BIN counts may be inflated just because of higher sampling effort. This individual-based rarefaction will allow us to compare expected BIN richness at a common sample size (the smaller total record count) without sampling bias.
 
@@ -151,6 +151,51 @@ rarefied_df <- bin_rich_raw %>%
 cat("\n=== RAREFIED BIN RICHNESS (MAJOR EDIT 1) ===\n")
 print(rarefied_df)
 
+### --- Major Edit 2: Permutation test for shared BIN overlap ---
+# Motivation:
+# Jaccard and Bray-Curtis describe differences, but they do not tell us if the number of shared BINs is unusually high or low. Here, we shuffle BINs between continents (while keeping each continent’s total BIN count the same) to see what amount of overlap would happen by chance. This gives us a fair comparison for the observed overlap.
+
+set.seed(6210)  # reproducible permutation results
+
+# Observed overlap and BIN counts per continent
+obs_shared <- length(shared_bins)
+na_bins    <- sum(pa$`North America` == 1)
+eu_bins    <- sum(pa$Eurasia == 1)
+all_bins   <- pa$bin_uri
+
+# Container for null draws (used later for Figure 5)
+perm_df <- NULL
+
+if (length(all_bins) > 0 && na_bins > 0 && eu_bins > 0) {
+  B <- 5000L  # number of permutations
+  
+  # Null model: randomly assign BIN membership, keeping richness per continent
+  sim_shared <- replicate(B, {
+    rand_na <- sample(all_bins, na_bins, replace = FALSE)
+    rand_eu <- sample(all_bins, eu_bins, replace = FALSE)
+    length(intersect(rand_na, rand_eu))
+  })
+  
+  # One-sided p-value: Pr(null <= observed overlap)  # lower-than-expected overlap
+  p_val_low <- mean(sim_shared <= obs_shared)
+  
+  perm_summary <- tibble::tibble(
+    observed_shared = obs_shared,
+    null_mean       = mean(sim_shared),
+    null_sd         = stats::sd(sim_shared),
+    p_value_low     = p_val_low
+  )
+
+  
+  cat("\n=== PERMUTATION TEST: SHARED BIN OVERLAP (MAJOR EDIT 2) ===\n")
+  print(perm_summary)
+  
+  # Store null draws for visualization in the Figures section
+  perm_df <- tibble::tibble(sim_shared = sim_shared)
+} else {
+  cat("\n=== PERMUTATION TEST SKIPPED: not enough BINs to simulate ===\n")
+}
+
 ## ======= 5: FIGURES =======
 # Figure 1: BIN richness per continent (bar plot)
 bin_rich <- pa |>
@@ -160,7 +205,7 @@ bin_rich <- pa |>
 
 p1 <- ggplot(bin_rich, aes(continent, unique_bins, fill = continent)) +
   geom_col(width = 0.7) +
-  labs(title = "Sciurinae BIN richness by continent",
+  labs(title = "Figure 1: Sciurinae BIN richness by continent",
        x = NULL, y = "Number of unique BINs") +
   scale_fill_manual(values = c("Eurasia" = "#FFC3C3", "North America" = "#FFE3A9"))+
   theme_minimal(base_size = 12) +
@@ -183,7 +228,7 @@ pa_long$bin_uri <- factor(pa_long$bin_uri, levels = keep_ids)
 p2 <- ggplot(pa_long, aes(continent, bin_uri, fill = factor(present))) +
   geom_tile(color = "white") +
   scale_fill_manual(values = c("0" = "#eeeeee", "1" = "#B0CE88"), name = "Present") +
-  labs(title = "Presence/absence of Sciurinae BINs across continents",
+  labs(title = "Figure 2: Presence/absence of Sciurinae BINs across continents",
        x = NULL, y = "BIN") +
   theme_minimal(base_size = 10) +
   theme(legend.position = "right",
@@ -197,7 +242,7 @@ ggsave("figs/Fig2_BIN_presence_heatmap.png", p2, width = 6, height = 6, dpi = 30
 rec_counts <- dat2 %>% count(continent)
 p3 <- ggplot(rec_counts, aes(continent, n, fill = continent)) +
   geom_col(width = 0.7) +
-  labs(title = "Number of public records by continent",
+  labs(title = "Figure 3: Number of public records by continent",
        x = NULL, y = "Records") +
   scale_fill_manual(values = c("Eurasia" = "#FFC3C3", "North America" = "#FFE3A9"))+
   theme_minimal(base_size = 12) +
@@ -227,6 +272,25 @@ p4 <- ggplot(rarefied_df,
   )
 
 ggsave("figs/Fig4_Rarefied_BIN_richness.png", p4, width = 6, height = 4, dpi = 300)
+
+# Figure 5: Null distribution of shared BINs under random BIN assignment
+if (!is.null(perm_df)) {
+  p5 <- ggplot(perm_df, aes(x = sim_shared)) +
+    geom_histogram(binwidth = 1, boundary = -0.5, colour = "white", fill = "#B0CE88") +
+    geom_vline(xintercept = obs_shared, linewidth = 1.1) +
+    labs(
+      title = "Figure 5: Null distribution of shared BIN overlaps",
+      subtitle = paste0("Observed overlap = ", obs_shared,
+                        " (vertical line). Null model preserves BIN counts per continent."),
+      x = "Shared BINs under null model",
+      y = "Frequency"
+    ) +
+    theme_minimal(base_size = 11) +
+    theme(
+      panel.grid = element_blank()
+    )
+  ggsave("figs/Fig5_Shared_BINs_null_distribution.png", p5, width = 6, height = 4, dpi = 300)
+}
 
 ## ======= 6: SUMMARY OUTPUT =======
 cat("\n=== SUMMARY ===\n")
