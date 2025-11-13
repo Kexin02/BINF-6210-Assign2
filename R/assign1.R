@@ -20,7 +20,7 @@
 
 ## REPRODUCIBILITY NOTES:
 # The script assumes the project root is open in an RStudio .Rproj so that 
-# relative paths (data/, figs/) resolve correctly.
+# relative paths (data/, figs/) resolve correctly. 
 
 ## ======= 0: LOAD PACKAGES =======
 library(dplyr)
@@ -116,6 +116,41 @@ shared_bins <- pa %>% filter(`North America` == 1 & `Eurasia` == 1) %>% pull(bin
 message(sprintf("Unique BINs NA=%d, EUAS=%d, Shared=%d",
                 sum(pa$`North America`), sum(pa$Eurasia), length(shared_bins)))
 
+## ======= 4B: RAREFIED BIN RICHNESS (MAJOR EDIT 1) =======
+# Motivation:
+# Eurasia has more public records than North America, so simple BIN counts may be inflated just because of higher sampling effort. This individual-based rarefaction will allow us to compare expected BIN richness at a common sample size (the smaller total record count) without sampling bias.
+
+# Total record counts per continent (from the count matrix used for Bray–Curtis)
+total_records <- rowSums(mat_bray)
+total_records
+
+# Rarefy both continents down to the smaller sample size
+rare_sample_size <- min(total_records)
+
+# vegan::rarefy expects a community matrix (rows = samples, cols = species)
+# and returns expected richness at 'sample' individuals.
+rare_vals <- vegan::rarefy(mat_bray, sample = rare_sample_size)
+
+# Build a tidy summary table of raw vs rarefied richness
+bin_rich_raw <- pa %>%
+  summarise(
+    `North America` = sum(`North America`),
+    `Eurasia`       = sum(Eurasia)
+  ) %>%
+  pivot_longer(everything(),
+               names_to  = "continent",
+               values_to = "raw_bin_richness")
+
+rarefied_df <- bin_rich_raw %>%
+  mutate(
+    total_records      = as.integer(total_records[continent]),
+    rarefaction_sample = rare_sample_size,
+    rarefied_richness  = as.numeric(rare_vals[continent])
+  )
+
+cat("\n=== RAREFIED BIN RICHNESS (MAJOR EDIT 1) ===\n")
+print(rarefied_df)
+
 ## ======= 5: FIGURES =======
 # Figure 1: BIN richness per continent (bar plot)
 bin_rich <- pa |>
@@ -171,6 +206,27 @@ p3 <- ggplot(rec_counts, aes(continent, n, fill = continent)) +
 
 ggsave("figs/Fig3_public_records_by_continent.png", p3, width = 6, height = 4, dpi = 300)
 
+# Figure 4: rarefied BIN richness (Optional visualization)
+p4 <- ggplot(rarefied_df,
+             aes(x = continent, y = rarefied_richness, fill = continent)) +
+  geom_col(width = 0.7) +
+  geom_text(aes(label = paste0("n=", total_records)),
+            vjust = -0.4, size = 3.2) +
+  labs(
+    title = "Figure 4: Rarefied Sciurinae BIN richness by continent",
+    subtitle = paste0("Expected richness at ", rare_sample_size,
+                      " records per continent (individual-based rarefaction)"),
+    x = NULL,
+    y = "Rarefied BIN richness"
+  ) +
+  scale_fill_manual(values = c("Eurasia" = "#FFC3C3", "North America" = "#FFE3A9")) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "none",
+    panel.grid      = element_blank()
+  )
+
+ggsave("figs/Fig4_Rarefied_BIN_richness.png", p4, width = 6, height = 4, dpi = 300)
 
 ## ======= 6: SUMMARY OUTPUT =======
 cat("\n=== SUMMARY ===\n")
