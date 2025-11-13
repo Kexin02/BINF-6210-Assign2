@@ -1,24 +1,57 @@
 # ====================================================
-# Comparing the BIN Composition of Subfamily Sciurinae 
-# between North America and Eurasia
-# Author: Kexin Gong
+# Primary Author: Kexin Gong
+# Secondary Contributor: Eman Tahir
+# Course: Software Tools (BINF 6210)
+
+# Project: Comparing the BIN Composition of Subfamily Sciurinae between North America and Eurasia 
+
+# Course: Software Tools (BINF 6210)
 # ====================================================
 
-# 0. Load required packages ----
-  library(dplyr)
-  library(tidyr)
-  library(ggplot2)
-  library(vegan)
-  library(readr)
-  library(stringr)
+## BACKGROUND:
+# The subfamily Sciurinae (tree squirrels and flying squirrels) has a wide geographic range across North America and Eurasia. DNA barcode records from BOLD can be grouped into BINs (Barcode Index Numbers), which provide a standardized way to compare genetic lineages across regions.
 
-# 1. Read data file ----
-dat <- read.delim("../data/result.tsv", sep = "\t", header = TRUE, quote = "", check.names = FALSE)
+## WHY THIS IS INTERESTING:
+# Although Sciurinae species occur on both continents, their actual BIN diversity and overlap remain unclear. Differences in species ranges,  historical biogeography, and sampling effort may all shape how similar or distinct their BIN assemblages appear.
+
+## RESEARCH QUESTION & HYPOTHESIS:
+# How similar is the BIN composition of subfamily Sciurinae between North America and Eurasia?
+# Hypothesis: Because of long-term geographic isolation, Sciurinae populations in North America and Eurasia will show distinct BIN assemblages with limited overlap.
+
+## REPRODUCIBILITY NOTES:
+# The script assumes the project root is open in an RStudio .Rproj so that 
+# relative paths (data/, figs/) resolve correctly.
+
+## ======= 0: LOAD PACKAGES =======
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(vegan)
+library(readr)
+library(stringr)
+
+## ======= 1: READ DATA + QUICK CHECKS =======
+# Read the BOLD result file and standardize the country column name.
+dat <- read.delim("data/result.tsv", sep = "\t", header = TRUE, quote = "", check.names = FALSE)
+
 # Replace the inconvenient column name used in the following code
 dat <- dat %>% rename(country = `country/ocean`)
 
-# 2. Map countries to continents ----
-# Define lists of countries belonging to North America and Eurasia
+# Quick data-quality snapshot
+cat("\n=== DATA QUALITY CHECK ===\n")
+dat_summary <- dat %>%
+  summarise(
+    records         = n(),
+    missing_country = sum(is.na(country)),
+    missing_bin     = sum(is.na(bin_uri)),
+    n_countries     = n_distinct(country),
+    n_bins          = n_distinct(bin_uri)
+  )
+print(dat_summary)
+
+## ======= 2: MAP COUNTRIES TO CONTINENTS =======
+# Map countries from the BOLD export into two focal continents: North America and Eurasia.
+
 # The following used country names based on the data file
 north_america <- c(
   "Canada", "United States", "Mexico", "Panama", "Costa Rica"
@@ -40,7 +73,11 @@ dat <- dat %>%
 # Keep only the two continents of interest
 dat2 <- dat %>% filter(continent %in% c("North America", "Eurasia"))
 
-# 3. Build BIN-by-continent matrix ----
+## ======= 3: BUILD BIN–BY–CONTINENT MATRICES =======
+# Count how many records belong to each BIN in each continent, then:
+#   (a) build a wide count matrix (BIN x continent)
+#   (b) build a presence/absence matrix (1 = present, 0 = absent)
+
 bin_counts <- dat2 %>%
   filter(!is.na(bin_uri)) %>%
   group_by(continent, bin_uri) %>%
@@ -51,12 +88,16 @@ bin_wide <- bin_counts %>%
   tidyr::pivot_wider(names_from = continent, values_from = n, values_fill = 0)
 
 # Presence/absence matrix (1 = present, 0 = absent)
+# Scalable version using across(): works even if more continents are added later.
 pa <- bin_wide %>%
-  transmute(bin_uri,
-            `North America` = as.integer(`North America` > 0),
-            `Eurasia`       = as.integer(`Eurasia` > 0))
+  mutate(across(-bin_uri, ~ as.integer(.x > 0)))
 
-# 4. Compute similarity ----
+## ======= 4: COMPUTE SIMILARITY METRICS =======
+# Compare the two continents using:
+# - Jaccard distance on presence/absence (composition only)
+# - Bray-Curtis distance on counts (abundance-sensitive)
+# Also count the number of shared BINs.
+
 # Convert to 2×N matrix (rows = continents, columns = BINs)
 mat <- as.matrix(t(pa[, -1]))
 rownames(mat) <- colnames(pa[, -1])
@@ -75,7 +116,7 @@ shared_bins <- pa %>% filter(`North America` == 1 & `Eurasia` == 1) %>% pull(bin
 message(sprintf("Unique BINs NA=%d, EUAS=%d, Shared=%d",
                 sum(pa$`North America`), sum(pa$Eurasia), length(shared_bins)))
 
-# 5. Create figures ----
+## ======= 5: FIGURES =======
 # Figure 1: BIN richness per continent (bar plot)
 bin_rich <- pa |>
   summarise(`North America` = sum(`North America`),
@@ -92,7 +133,7 @@ p1 <- ggplot(bin_rich, aes(continent, unique_bins, fill = continent)) +
         panel.grid = element_blank()) +
   ylim(0,15)
 
-ggsave("../figs/Fig1_BIN_richness_by_continent.png", p1, width = 6, height = 4, dpi = 300)
+ggsave("figs/Fig1_BIN_richness_by_continent.png", p1, width = 6, height = 4, dpi = 300)
 
 # Figure 2: Presence/absence heatmap (BIN × continent)
 pa_long <- pa %>%
@@ -115,7 +156,7 @@ p2 <- ggplot(pa_long, aes(continent, bin_uri, fill = factor(present))) +
         axis.ticks.y = element_blank(),
         panel.grid = element_blank())
 
-ggsave("../figs/Fig2_BIN_presence_heatmap.png", p2, width = 6, height = 6, dpi = 300)
+ggsave("figs/Fig2_BIN_presence_heatmap.png", p2, width = 6, height = 6, dpi = 300)
 
 # Figure 3: Number of public records by continent
 rec_counts <- dat2 %>% count(continent)
@@ -128,12 +169,12 @@ p3 <- ggplot(rec_counts, aes(continent, n, fill = continent)) +
   theme(legend.position = "none",
         panel.grid = element_blank())
 
-ggsave("../figs/Fig3_public_records_by_continent.png", p3, width = 6, height = 4, dpi = 300)
+ggsave("figs/Fig3_public_records_by_continent.png", p3, width = 6, height = 4, dpi = 300)
 
 
-# 6. Summary ----
+## ======= 6: SUMMARY OUTPUT =======
 cat("\n=== SUMMARY ===\n")
-cat("File:", "../data/result.tsv", "\n")
+cat("File:", "data/result.tsv", "\n")
 cat("Records used:", nrow(dat2), "\n")
 cat("Continents:\n"); print(table(dat2$continent))
 cat("Unique BINs per continent:\n"); print(bin_rich)
