@@ -19,8 +19,9 @@
 # Hypothesis: Because of long-term geographic isolation, Sciurinae populations in North America and Eurasia will show distinct BIN assemblages with limited overlap.
 
 ## REPRODUCIBILITY NOTES:
-# The script assumes the project root is open in an RStudio .Rproj so that 
-# relative paths (data/, figs/) resolve correctly. 
+# This script expects the working directory to be the R/ folder of the project.
+# Make sure your working directory is set correctly so that the relative paths (../data and ../figs) load and save files in the right place.
+# You can check your current directory with getwd().
 
 ## ======= 0: LOAD PACKAGES =======
 library(dplyr)
@@ -32,7 +33,7 @@ library(stringr)
 
 ## ======= 1: READ DATA + QUICK CHECKS =======
 # Read the BOLD result file and standardize the country column name.
-dat <- read.delim("data/result.tsv", sep = "\t", header = TRUE, quote = "", check.names = FALSE)
+dat <- read.delim("../data/result.tsv", sep = "\t", header = TRUE, quote = "", check.names = FALSE)
 
 # Replace the inconvenient column name used in the following code
 dat <- dat %>% rename(country = `country/ocean`)
@@ -257,7 +258,7 @@ p1 <- ggplot(bin_rich, aes(continent, unique_bins, fill = continent)) +
         panel.grid = element_blank()) +
   ylim(0,15)
 
-ggsave("figs/Fig1_BIN_richness_by_continent.png", p1, width = 6, height = 4, dpi = 300)
+ggsave("../figs/Fig1_BIN_richness_by_continent.png", p1, width = 6, height = 4, dpi = 300)
 
 # Figure 2: Presence/absence heatmap (BIN × continent)
 pa_long <- pa %>%
@@ -280,7 +281,7 @@ p2 <- ggplot(pa_long, aes(continent, bin_uri, fill = factor(present))) +
         axis.ticks.y = element_blank(),
         panel.grid = element_blank())
 
-ggsave("figs/Fig2_BIN_presence_heatmap.png", p2, width = 6, height = 6, dpi = 300)
+ggsave("../figs/Fig2_BIN_presence_heatmap.png", p2, width = 6, height = 6, dpi = 300)
 
 # Figure 3: Number of public records by continent
 rec_counts <- dat2 %>% count(continent)
@@ -293,7 +294,7 @@ p3 <- ggplot(rec_counts, aes(continent, n, fill = continent)) +
   theme(legend.position = "none",
         panel.grid = element_blank())
 
-ggsave("figs/Fig3_public_records_by_continent.png", p3, width = 6, height = 4, dpi = 300)
+ggsave("../figs/Fig3_public_records_by_continent.png", p3, width = 6, height = 4, dpi = 300)
 
 # Figure 4: rarefied BIN richness (Optional visualization)
 p4 <- ggplot(rarefied_df,
@@ -315,7 +316,7 @@ p4 <- ggplot(rarefied_df,
     panel.grid      = element_blank()
   )
 
-ggsave("figs/Fig4_Rarefied_BIN_richness.png", p4, width = 6, height = 4, dpi = 300)
+ggsave("../figs/Fig4_Rarefied_BIN_richness.png", p4, width = 6, height = 4, dpi = 300)
 
 # Figure 5: Null distribution of shared BINs under random BIN assignment
 if (!is.null(perm_df)) {
@@ -333,12 +334,12 @@ if (!is.null(perm_df)) {
     theme(
       panel.grid = element_blank()
     )
-  ggsave("figs/Fig5_Shared_BINs_null_distribution.png", p5, width = 6, height = 4, dpi = 300)
+  ggsave("../figs/Fig5_Shared_BINs_null_distribution.png", p5, width = 6, height = 4, dpi = 300)
 }
 
 ## ======= 6: SUMMARY OUTPUT =======
 cat("\n=== SUMMARY ===\n")
-cat("File:", "data/result.tsv", "\n")
+cat("File:", "../data/result.tsv", "\n")
 cat("Records used:", nrow(dat2), "\n")
 cat("Continents:\n"); print(table(dat2$continent))
 cat("Unique BINs per continent:\n"); print(bin_rich)
