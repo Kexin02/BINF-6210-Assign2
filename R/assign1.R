@@ -1,6 +1,9 @@
 # ====================================================
 # Primary Author: Kexin Gong
-# Secondary Contributor: Eman Tahir
+# Contributors:
+#   Secondary Contributor: Eman Tahir
+#   Reviewed by: Stephanie Saab, Iroayo Toki
+
 # Course: Software Tools (BINF 6210)
 
 # Project: Comparing the BIN Composition of Subfamily Sciurinae between North America and Eurasia 
@@ -20,7 +23,7 @@
 
 ## REPRODUCIBILITY NOTES:
 # This script expects the working directory to be the R/ folder of the project.
-# Make sure your working directory is set correctly so that the relative paths (../data and ../figs) load and save files in the right place.
+# Make sure your working directory is set correctly so that the relative paths(../data and ../figs) load and save files in the right place.
 # You can check your current directory with getwd().
 
 ## ======= 0: LOAD PACKAGES =======
@@ -305,11 +308,12 @@ p4 <- ggplot(rarefied_df,
   labs(
     title = "Figure 4: Rarefied Sciurinae BIN richness by continent",
     subtitle = paste0("Expected richness at ", rare_sample_size,
-                      " records per continent (individual-based rarefaction)"),
+                      " records per continent"),
     x = NULL,
     y = "Rarefied BIN richness"
   ) +
   scale_fill_manual(values = c("Eurasia" = "#FFC3C3", "North America" = "#FFE3A9")) +
+  ylim(0, max(rarefied_df$rarefied_richness) + 2) +   # <-- Added here
   theme_minimal(base_size = 12) +
   theme(
     legend.position = "none",
@@ -320,21 +324,45 @@ ggsave("../figs/Fig4_Rarefied_BIN_richness.png", p4, width = 6, height = 4, dpi 
 
 # Figure 5: Null distribution of shared BINs under random BIN assignment
 if (!is.null(perm_df)) {
+  
   p5 <- ggplot(perm_df, aes(x = sim_shared)) +
-    geom_histogram(binwidth = 1, boundary = -0.5, colour = "white", fill = "#B0CE88") +
-    geom_vline(xintercept = obs_shared, linewidth = 1.1) +
+    geom_histogram(
+      binwidth = 1,
+      boundary = -0.5,
+      colour = "white",
+      fill = "#B0CE88"
+    ) +
+    geom_vline(
+      xintercept = obs_shared,
+      color = "black",
+      linewidth = 1.2
+    ) +
+    annotate(
+      "text",
+      x = obs_shared + 0.1,
+      y = max(table(perm_df$sim_shared)) * 0.95,
+      label = paste0("Observed = ", obs_shared),
+      hjust = 0,
+      size = 3.5
+    ) +
+    scale_x_continuous(
+      limits = c(1, 12),
+      breaks = 1:12
+    ) +
     labs(
       title = "Figure 5: Null distribution of shared BIN overlaps",
-      subtitle = paste0("Observed overlap = ", obs_shared,
-                        " (vertical line). Null model preserves BIN counts per continent."),
+      subtitle = "Vertical line shows the observed 2 shared BINs",
       x = "Shared BINs under null model",
       y = "Frequency"
     ) +
-    theme_minimal(base_size = 11) +
+    theme_minimal(base_size = 12) +
     theme(
-      panel.grid = element_blank()
+      panel.grid = element_blank(),
+      axis.line = element_line(color = "black")   # add visible axes
     )
-  ggsave("../figs/Fig5_Shared_BINs_null_distribution.png", p5, width = 6, height = 4, dpi = 300)
+  
+  ggsave(
+    "../figs/Fig5_Shared_BINs_null_distribution.png", p5, width = 6, height = 4, dpi = 300)
 }
 
 ## ======= 6: SUMMARY OUTPUT =======
